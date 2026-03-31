@@ -1,0 +1,14 @@
+schedules:
+  # Process the day's meetings every weekday evening at 6 PM
+  - id: evening-processing
+    cron: "0 18 * * 1-5"
+    workflow_ref: process-meeting
+    enabled: true
+    description: "Weekday evening run — processes any transcript files dropped into transcripts/raw/ during the day"
+
+  # Weekly action item status review every Monday morning at 9 AM
+  - id: weekly-action-review
+    cron: "0 9 * * 1"
+    workflow_ref: action-review
+    enabled: true
+    description: "Monday morning review of all outstanding action items across recent meetings"

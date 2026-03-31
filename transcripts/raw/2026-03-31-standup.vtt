@@ -1,0 +1,25 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:05.000
+Alice: Good morning everyone. Let's go around. Bob?
+
+00:00:05.000 --> 00:00:15.000
+Bob: Yesterday I finished the checkout page layout. Today I'm starting on the payment integration. No blockers.
+
+00:00:15.000 --> 00:00:25.000
+Carol: I wrapped up the API docs. Today starting on the payment endpoints Bob needs. No blockers.
+
+00:00:25.000 --> 00:00:35.000
+Dave: SQL injection fix is in PR review. Waiting on Bob's review. That's my only blocker.
+
+00:00:35.000 --> 00:00:45.000
+Eve: Writing up notification feature acceptance criteria. Should be done today. No blockers.
+
+00:00:45.000 --> 00:00:55.000
+Alice: Thanks everyone. Dave, Bob — can you do that review today? We want that fix in before Wednesday's deploy.
+
+00:00:55.000 --> 00:01:05.000
+Bob: Yep, I'll review it this morning.
+
+00:01:05.000 --> 00:01:10.000
+Alice: Great. That's it, have a good day everyone.

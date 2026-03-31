@@ -1,0 +1,34 @@
+Sprint Planning — March 31, 2026
+Attendees: Alice, Bob, Carol, Dave, Eve
+
+Alice: Alright everyone, let's kick off sprint planning. First, quick update on last sprint's action items. Bob, how did the database migration go?
+
+Bob: Migration is done and deployed to staging. We hit a snag with the foreign key constraints but resolved it Friday. Production deploy is scheduled for Wednesday.
+
+Alice: Great. Carol, the API docs update?
+
+Carol: Still in progress, about 80% done. I got pulled into the incident last week. Should be wrapped up by tomorrow.
+
+Alice: OK, let's flag that as carry-over. Dave, your security audit findings?
+
+Dave: I've documented all findings in the wiki. Three critical items: the JWT expiration is too long, we're not rate-limiting the auth endpoint, and there's a potential SQL injection in the search API. I'd recommend we prioritize the SQL injection fix this sprint.
+
+Alice: Agreed. Let's make that P0. Eve, what's the product side looking like for this sprint?
+
+Eve: Two main things. First, the checkout flow redesign — the designs are finalized in Figma and ready for implementation. Second, we need to start on the notification preferences feature. I'd say checkout is higher priority since it's blocking the Q2 launch.
+
+Alice: Let's plan for checkout this sprint and notifications next sprint. Bob, can you take point on the checkout implementation?
+
+Bob: Sure. I'll need Carol's help on the API side for the new payment endpoints.
+
+Carol: I can start on that once I finish the docs, so Wednesday.
+
+Alice: Perfect. Dave, you'll handle the SQL injection fix?
+
+Dave: Yes, I'll have a PR up by Thursday.
+
+Alice: And Eve, can you write up the acceptance criteria for the notification feature so it's ready for next sprint?
+
+Eve: Will do, I'll have it in Linear by Friday.
+
+Alice: Great. One more thing — we're moving standups to 9:30 AM starting next week. Any objections? No? OK, decided. Let's get to it.

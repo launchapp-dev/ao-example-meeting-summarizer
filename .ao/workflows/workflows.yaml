@@ -1,0 +1,44 @@
+default_workflow_ref: process-meeting
+
+workflows:
+  # ── Primary workflow: process a meeting transcript end-to-end ─────────────
+  - id: process-meeting
+    name: "Process Meeting Transcript"
+    description: "Ingest raw transcript, extract topics, summarize, track action items in Linear, and draft follow-up email"
+    phases:
+      - parse-transcript
+      - check-content:
+          on_verdict:
+            empty:
+              target: parse-transcript   # Skip processing — wait for real content
+          max_rework_attempts: 0
+      - extract-topics
+      - summarize-meeting
+      - review-summary:
+          on_verdict:
+            rework:
+              target: summarize-meeting  # Loop back for quality improvement
+          max_rework_attempts: 2
+      - track-actions
+      - draft-followup
+    post_success:
+      merge:
+        strategy: squash
+        target_branch: main
+        create_pr: true
+        auto_merge: true
+        cleanup_worktree: true
+
+  # ── Secondary workflow: weekly cross-meeting action item review ────────────
+  - id: action-review
+    name: "Weekly Action Item Review"
+    description: "Review status of all outstanding action items across recent meetings, flag blocked and overdue items"
+    phases:
+      - review-outstanding
+    post_success:
+      merge:
+        strategy: squash
+        target_branch: main
+        create_pr: true
+        auto_merge: true
+        cleanup_worktree: true

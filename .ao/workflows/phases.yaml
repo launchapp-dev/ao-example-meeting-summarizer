@@ -1,0 +1,257 @@
+phases:
+  # ── Phase 1: Parse raw transcript files ──────────────────────────────────
+  parse-transcript:
+    mode: agent
+    agent: transcript-parser
+    directive: |
+      Scan transcripts/raw/ for new transcript files (.txt, .md, .vtt).
+      For each file found:
+        1. Detect the file format from its extension.
+        2. Parse speaker turns: extract speaker name, timestamp (relative to meeting start),
+           and verbatim text for each turn.
+        3. Infer meeting metadata: title (from file header or filename), date, attendees list,
+           and total duration.
+        4. Normalize speaker names to Title Case. Deduplicate the attendees list.
+        5. Write the parsed result to data/parsed-transcript.json.
+        6. Move the source file from transcripts/raw/ to transcripts/processed/.
+
+      If transcripts/raw/ contains no files, output a JSON file at data/parsed-transcript.json
+      with content: { "error": "no_transcripts_found", "speaker_turns": [] }
+    capabilities:
+      mutates_state: true
+      writes_files: true
+
+  # ── Phase 2: Decide if transcript has substantive content ─────────────────
+  check-content:
+    mode: agent
+    agent: transcript-parser
+    directive: |
+      Read data/parsed-transcript.json.
+
+      Evaluate whether this meeting transcript has substantive content worth processing:
+      - Count the number of speaker turns with meaningful text (>5 words each)
+      - A minimum of 3 such turns is required to proceed
+      - An error field (e.g., no_transcripts_found) automatically means "empty"
+
+      Return your verdict:
+      - "sufficient": transcript has ≥3 substantive speaker turns → processing continues
+      - "empty": transcript is trivial, empty, or missing → skip all downstream processing
+    decision_contract:
+      required_fields: [verdict, reasoning]
+
+  # ── Phase 3: Extract discussion topics ───────────────────────────────────
+  extract-topics:
+    mode: agent
+    agent: topic-extractor
+    directive: |
+      Read data/parsed-transcript.json.
+
+      Use the sequential-thinking MCP to reason through the transcript and identify
+      distinct discussion topics. Work through these reasoning steps:
+        Step 1: List all speaker turns and note the subject matter of each.
+        Step 2: Identify explicit topic transitions (agenda items, "let's move on", "next up").
+        Step 3: Identify implicit transitions (clear subject changes without explicit markers).
+        Step 4: Group contiguous turns about the same subject.
+        Step 5: Name each topic group with a concise label (5 words max).
+        Step 6: Classify each topic's nature: decision | discussion | status-update |
+                brainstorm | action-planning | fyi
+        Step 7: Rank topics by importance (1 = highest) based on: time spent, participant
+                count, and whether decisions were made.
+
+      Write the resulting topic list to data/topics.json with this structure:
+      {
+        "meeting_title": "...",
+        "date": "YYYY-MM-DD",
+        "topics": [
+          {
+            "topic_id": "t001",
+            "title": "...",
+            "nature": "...",
+            "importance_rank": 1,
+            "speakers": ["..."],
+            "transcript_segment_indices": [0, 1, 2],
+            "duration_estimate_minutes": 5
+          }
+        ]
+      }
+    capabilities:
+      mutates_state: true
+      writes_files: true
+
+  # ── Phase 4: Generate meeting summary with historical context ─────────────
+  summarize-meeting:
+    mode: agent
+    agent: summarizer
+    directive: |
+      Read data/topics.json and data/parsed-transcript.json.
+
+      Step 1 — Retrieve historical context from memory MCP:
+        - Search for entries related to each topic title and key speakers
+        - Note prior decisions, open questions, and action item outcomes
+        - Identify recurring attendees and their typical roles
+
+      Step 2 — For each topic, write:
+        - summary: a paragraph describing what was discussed and concluded
+        - decisions: list of { text, decided_by, rationale } (empty list if none)
+        - open_questions: list of unresolved items from this topic
+        - prior_context: what memory MCP told you about this recurring topic (empty string if new)
+
+      Step 3 — Write the overall meeting summary:
+        - executive_summary: single paragraph covering the whole meeting
+        - key_takeaways: 3–6 bullet points
+
+      Step 4 — Store new context in memory MCP:
+        - Entity: meeting "{title} {date}" with date, attendees, executive_summary
+        - For each decision: relation "decided" from meeting entity to a decision entity
+        - For each open question: relation "open_question" from meeting entity
+        - For each attendee: update their role/participation if notable
+
+      Write the full structured summary to data/summary.json.
+    capabilities:
+      mutates_state: true
+      writes_files: true
+
+  # ── Phase 5: Quality review of summary ───────────────────────────────────
+  review-summary:
+    mode: agent
+    agent: summarizer
+    directive: |
+      Read data/topics.json and data/summary.json.
+
+      Self-review the generated summary for completeness and accuracy:
+
+      Check 1 — Coverage: Does every topic in data/topics.json have a corresponding
+                 summary section in data/summary.json? Flag any missing topics.
+
+      Check 2 — Decisions: Are all decisions stated clearly with a decision-maker?
+                 Vague outcomes like "we discussed..." should be flagged.
+
+      Check 3 — Action items: Are there implicit commitments in the topic summaries
+                 that look like action items but are not explicitly captured?
+                 (These will be formally extracted in track-actions, but the summary
+                 should mention them.)
+
+      Check 4 — Historical accuracy: If prior_context was included for any topic,
+                 does it accurately reflect what was in the transcript vs. prior memory?
+
+      Verdict:
+      - "approve": all checks pass or only minor issues that don't affect usability
+      - "rework": one or more checks reveal significant gaps or inaccuracies
+        (provide specific feedback in reasoning so summarize-meeting can fix them)
+    decision_contract:
+      required_fields: [verdict, reasoning]
+
+  # ── Phase 6: Extract and create Linear issues for action items ───────────
+  track-actions:
+    mode: agent
+    agent: action-tracker
+    directive: |
+      Read data/summary.json.
+
+      Step 1 — Extract all action items from the summary:
+        Look for: commitments, assignments, "will do", "can you", "let's make sure",
+        explicit deadlines, and any item flagged as action-planning nature.
+        Each action item needs: description, owner, urgency, deadline.
+
+      Step 2 — Classify urgency using config/settings.yaml urgency_keywords as a guide,
+        and also from deadline context:
+        - immediate: must be done today or has "ASAP/urgent/blocking" language
+        - next-sprint: this week, by Friday, "soon"
+        - backlog: eventually, when possible, low priority
+
+      Step 3 — Create Linear issues:
+        For each new action item, create a Linear issue using the mcp-linear tool.
+        Use the team ID and project ID from config/settings.yaml.
+        Set priority according to urgency (immediate=1/Urgent, next-sprint=2/High, backlog=3/Medium).
+        Assign to the owner. Set due date if known.
+        Record the returned issue ID.
+
+      Step 4 — Check previous action items:
+        Use memory MCP to retrieve Linear issue IDs from prior meetings.
+        Query Linear for current status of each (done, in_progress, cancelled, etc.).
+        Classify: done | in-progress | blocked | overdue.
+
+      Step 5 — Store mappings:
+        For each new action item, store in memory MCP:
+          Entity: "action:{linear_issue_id}" with description, owner, deadline, meeting date.
+
+      Write the complete manifest to data/action-items.json.
+    capabilities:
+      mutates_state: true
+      writes_files: true
+
+  # ── Phase 7: Draft follow-up documents and archive ───────────────────────
+  draft-followup:
+    mode: agent
+    agent: followup-drafter
+    directive: |
+      Read data/summary.json and data/action-items.json.
+
+      Task 1 — Write full meeting notes to output/YYYY-MM-DD-<meeting-title>.md
+        where YYYY-MM-DD is the meeting date and <meeting-title> is a slug of the title.
+        Example: output/2026-03-31-sprint-planning.md
+
+        Include these sections in order:
+        # {Meeting Title} — {Month Day, Year}
+        **Attendees:** {comma list}
+        **Duration:** ~{N} minutes
+        ---
+        ## Executive Summary
+        ## Decisions
+        ## Action Items (table: Owner | Task | Urgency | Deadline | Linear)
+        ## Outstanding from Previous Meetings (from from_previous_meetings)
+        ## Topic Summaries (one subsection per topic)
+        ## Open Questions / Next Meeting
+
+      Task 2 — Write follow-up email to output/followup-email.md
+        Format:
+        **Subject:** {Meeting Title} Notes — {Date}
+        [Blank line]
+        Hi team,
+        [3–5 sentence recap paragraph]
+        **Key Decisions:**
+        - ...
+        **Action Items:**
+        - {Owner}: {task} (by {deadline})
+        Full meeting notes: [link]
+        Thanks, / Meeting Summarizer Bot
+
+      Task 3 — Archive pipeline data:
+        Create directory data/history/YYYY-MM-DD/ (using meeting date).
+        Copy (or move) data/parsed-transcript.json, data/topics.json, data/summary.json,
+        and data/action-items.json into that directory.
+    capabilities:
+      mutates_state: true
+      writes_files: true
+
+  # ── Phase 8: Weekly action item review (separate workflow) ────────────────
+  review-outstanding:
+    mode: agent
+    agent: action-tracker
+    directive: |
+      Perform a cross-meeting action item status review.
+
+      Step 1 — Use memory MCP to retrieve all tracked action items.
+        Query for all entities with prefix "action:" to get their Linear issue IDs.
+
+      Step 2 — Query Linear for current status of each issue.
+        Group by status:
+        - done: issue is completed/cancelled
+        - in-progress: issue is in progress or started
+        - blocked: issue has blocker label or is marked blocked in Linear
+        - overdue: due date has passed and issue is not done
+
+      Step 3 — Write output/weekly-action-review.md with sections:
+        # Weekly Action Item Review — {today's date}
+        ## Completed This Week (celebrate wins)
+        ## In Progress (brief status per item)
+        ## Blocked (needs escalation — flag owner and blocker)
+        ## Overdue (needs follow-up — highlight urgency)
+        ## Summary Stats (total tracked, % complete, # overdue)
+
+      Step 4 — Update memory MCP:
+        For done items: update entity status to "completed", record completion date.
+        For overdue items: add an "overdue_since" observation.
+    capabilities:
+      mutates_state: true
+      writes_files: true

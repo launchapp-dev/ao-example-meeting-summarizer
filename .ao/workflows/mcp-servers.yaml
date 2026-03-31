@@ -1,0 +1,31 @@
+mcp_servers:
+  filesystem:
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "."
+    description: "Read/write transcript files, data files, and output documents within this project"
+
+  sequential-thinking:
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-sequential-thinking"
+    description: "Structured reasoning chains for topic extraction and classification"
+
+  memory:
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-memory"
+    description: "Persistent knowledge graph — store decisions, action items, and meeting context across sessions"
+
+  linear:
+    command: npx
+    args:
+      - "-y"
+      - "@tacticlaunch/mcp-linear"
+    env:
+      LINEAR_API_KEY: "${LINEAR_API_KEY}"
+    description: "Create and query Linear issues for action item tracking"

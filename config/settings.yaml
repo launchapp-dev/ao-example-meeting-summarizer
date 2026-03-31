@@ -1,0 +1,66 @@
+# Meeting Summarizer — Configuration
+
+meeting_defaults:
+  timezone: "America/New_York"
+  default_meeting_title: "Team Meeting"
+  min_speaker_turns: 3          # Minimum speaker turns to consider a transcript valid
+
+# Transcript parsing
+transcript:
+  supported_formats:
+    - ".txt"                     # Plain text: "Speaker: text" or "[Speaker] text"
+    - ".md"                      # Markdown meeting notes with speaker annotations
+    - ".vtt"                     # WebVTT captions (from Zoom, Google Meet, Teams)
+  speaker_patterns:
+    - "^(?P<speaker>[A-Za-z ]+):\\s"      # "Alice: some text"
+    - "^\\[(?P<speaker>[A-Za-z ]+)\\]"    # "[Alice] some text"
+
+# Action item urgency classification keywords
+action_items:
+  urgency_keywords:
+    immediate:
+      - "ASAP"
+      - "today"
+      - "right now"
+      - "urgent"
+      - "blocking"
+      - "critical"
+      - "P0"
+    next_sprint:
+      - "this week"
+      - "by Friday"
+      - "next few days"
+      - "soon"
+      - "end of week"
+    backlog:
+      - "eventually"
+      - "when you get a chance"
+      - "low priority"
+      - "nice to have"
+      - "next sprint"
+      - "next quarter"
+
+# Linear integration settings
+linear:
+  team_id: "TEAM_ID"             # Your Linear team ID (find in Linear → Settings → API)
+  default_project: "PROJECT_ID"  # Default project for meeting action item issues
+  labels:
+    action_item: "meeting-action"
+    decision: "meeting-decision"
+  priority_map:
+    immediate: 1                 # Urgent
+    next_sprint: 2               # High
+    backlog: 3                   # Medium
+
+# Memory / historical context settings
+memory:
+  max_meeting_history: 30        # Keep context for last N meetings
+  recurring_meeting_patterns:    # Auto-detect recurring meeting types by title keywords
+    - "standup"
+    - "sprint planning"
+    - "retro"
+    - "retrospective"
+    - "1:1"
+    - "all hands"
+    - "weekly sync"
+    - "planning"
